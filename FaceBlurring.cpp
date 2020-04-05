@@ -25,7 +25,6 @@ private:
 	unordered_map<int, Ptr<TrackerKCF>> trackers;
 	unordered_map<int, int> framesSinceFailure;
 	unordered_map<int, Rect2d> faces;
-	unordered_set<int> index;
 	unordered_set<int> newFaceIndex;
 	int frameCount;
 	//unordered_map<int, VectorXf> prev_face;
@@ -139,17 +138,24 @@ private:
   }
 public:
 
+  unordered_map<int, Rect2d> facesScaled;
+  unordered_set<int> index;
+
   FaceBlurring() {
 		cascade.load(PATH_TO_FACE_DETECTOR);
 		frameCount = 0;
-	}
+  }
 
   void processFrame(const SourceFrame& frame) override {
     updateTrackers(frame.frame, frame.grayscale_frame);
   }
 
-  void applyEffect(const SourceFrame& original, cv::Mat& frame) override {
+  void applyEffect(const SourceFrame& original, Mat& frame) override {
+    facesScaling(original, frame);
+    displayFaces(frame, facesScaled);
+  }
 
+  void facesScaling(const SourceFrame& original, Mat& frame) {
     int src_width = static_cast<int>(original.frame.cols);
     int src_height = static_cast<int>(original.frame.rows);
 
@@ -159,22 +165,23 @@ public:
     float x_scale = (float) frame_width / (float) src_width;
     float y_scale = (float) frame_height / (float) src_height;
 
-    unordered_map<int, Rect2d> facesToDisplay;
 
     for (int i : index) {
-      facesToDisplay[i] = faces[i];
-      facesToDisplay[i].height *= y_scale;
-			facesToDisplay[i].width *= x_scale;
-			facesToDisplay[i].x *= x_scale;
-			facesToDisplay[i].y *= y_scale;
-		}
-
-    displayFaces(frame, facesToDisplay);
+      facesScaled[i] = faces[i];
+      facesScaled[i].height *= y_scale;
+      facesScaled[i].width *= x_scale;
+      facesScaled[i].x *= x_scale;
+      facesScaled[i].y *= y_scale;
+    }
   }
 
-  void getFaces() {
-
+  unordered_map<int, Rect2d>* getFaces(const SourceFrame& original, Mat& frame) {
+    facesScaling(original, frame);
+    return &facesScaled;
   }
 
+  unordered_set<int>* getIndex() {
+    return &index;
+  }
 
 };
