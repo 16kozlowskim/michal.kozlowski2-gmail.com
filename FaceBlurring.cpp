@@ -1,5 +1,5 @@
 #include "VideoEffect.h"
-//#include "pca/IPCA.hpp"
+#include "pca/IPCA.hpp"
 
 #include <opencv2/objdetect.hpp>
 #include <opencv2/highgui.hpp>
@@ -13,7 +13,7 @@
 
 using namespace std;
 using namespace cv;
-//using namespace Eigen;
+using namespace Eigen;
 
 class FaceBlurring : public VideoEffect {
 private:
@@ -27,8 +27,13 @@ private:
 	unordered_map<int, Rect2d> faces;
 	unordered_set<int> newFaceIndex;
 	int frameCount;
-	//unordered_map<int, VectorXf> prev_face;
-	//float inter_class_dist;
+
+
+  //pca vars
+	const int bbox_dim = 50;
+	const int eigen_count = 20;
+	const int amnesic = 2;
+	CCIPCA ccipca;
 
   bool facesIsEmpty() {
     return index.empty();
@@ -110,6 +115,7 @@ private:
         }
       }
     }
+    pca(gray);
     frameCount = (frameCount + 1) % 5;
 
   }
@@ -121,6 +127,29 @@ private:
     }
 
   }
+
+  void pca(const Mat& gray) {
+
+		Mat subImg, reSized;
+		int data_dim = bbox_dim*bbox_dim;
+		if (index.size() > 0) {
+			for (int i : index) {
+        try {
+          subImg = gray(faces[i]);
+        } catch (Exception e) {
+          continue;
+        }
+				resize(subImg, reSized, Size(bbox_dim, bbox_dim));
+				Mat float_mat;
+				reSized.convertTo(float_mat,CV_32F);
+				Map<VectorXf> new_face(float_mat.ptr<float>(), data_dim);
+
+				ccipca.update(new_face);
+			}
+
+		}
+
+	}
 
 
   void scaleDownFrame(const Mat& bigFrame, Mat& smallFrame) {
@@ -144,6 +173,8 @@ public:
   FaceBlurring() {
 		cascade.load(PATH_TO_FACE_DETECTOR);
 		frameCount = 0;
+    ccipca = CCIPCA(eigen_count, bbox_dim*bbox_dim, amnesic);
+
   }
 
   void processFrame(const SourceFrame& frame) override {
@@ -175,13 +206,6 @@ public:
     }
   }
 
-  unordered_map<int, Rect2d>* getFaces(const SourceFrame& original, Mat& frame) {
-    facesScaling(original, frame);
-    return &facesScaled;
-  }
 
-  unordered_set<int>* getIndex() {
-    return &index;
-  }
 
 };
